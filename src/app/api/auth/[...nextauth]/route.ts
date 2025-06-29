@@ -1,7 +1,7 @@
 // app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth"
-import WebAuthnProvider from "next-auth/providers/webauthn"
 import { CustomSupabaseAdapter } from "@/lib/adapter"
+import Passkey from "@auth/core/providers/passkey";
 
 /** -----------------------------------------------------------------
  *  1) Build the Auth.js handler
@@ -15,17 +15,7 @@ const { handlers, auth } = NextAuth({
         db: { schema: "next_auth" },                     // makes every query hit next_auth.*
     }),
 
-    providers: [
-        WebAuthnProvider({
-            name: "Passkey",
-            relayingParty: {
-                id:  process.env.NODE_ENV === "production"
-                    ? "toolkit.vishalthakur.me"
-                    : "localhost",
-                name: "VT Apps",
-            },
-        })
-    ],
+    providers: [Passkey],
 
     session: { strategy: "jwt" },                     // or "database" if you prefer
     experimental: { enableWebAuthn: true },           // keeps the console warning away
