@@ -5,6 +5,7 @@ import {SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
 import {AppSidebar} from "@/components/ui/app-sidebar";
 import React from "react";
 import {ThemeProvider} from "@/components/ui/theme-provider";
+import AuthProvider from "@/app/authprovider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,20 +32,22 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-      <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-      >
-          <SidebarProvider>
-              <AppSidebar />
-              <main>
-                  <SidebarTrigger />
-                  {children}
-              </main>
-          </SidebarProvider>
-      </ThemeProvider>
+      <AuthProvider>
+          <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+          >
+              <SidebarProvider>
+                  <AppSidebar />
+                  <main>
+                      <SidebarTrigger />
+                      {children}
+                  </main>
+              </SidebarProvider>
+          </ThemeProvider>
+      </AuthProvider>
       </body>
     </html>
   );
