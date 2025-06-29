@@ -1,15 +1,24 @@
 // src/lib/adapter.ts
-import { SupabaseAdapter, type SupabaseAdapterOptions } from "@auth/supabase-adapter"
+import { SupabaseAdapter } from "@auth/supabase-adapter"
 import { createClient } from "@supabase/supabase-js"
 import type { Adapter } from "next-auth/adapters"
 
 export function CustomSupabaseAdapter(
-    options: SupabaseAdapterOptions
+    options: {
+        url: string ;
+        secret: string;
+        db: { schema: string }
+    }
 ): Adapter {
-    const supabase = createClient(options.url, options.secret!);
+    const supabase = createClient(options.url, options.secret!, {
+        db: { schema: options.db?.schema ?? "next_auth" },
+    })
 
     // Get the base adapter
-    const adapter = SupabaseAdapter(options) as Adapter;
+    const adapter = SupabaseAdapter({
+        url:    options.url    ?? process.env.SUPABASE_URL!,
+        secret: options.secret ?? process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    }) as Adapter
 
     // Manually add the missing methods for the Passkey provider
     // This preserves the 'this' context of the original adapter.

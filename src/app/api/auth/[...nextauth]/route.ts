@@ -1,35 +1,40 @@
-// src/app/api/auth/[...nextauth]/route.ts
+// app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth"
+import WebAuthnProvider from "next-auth/providers/webauthn"
 import { CustomSupabaseAdapter } from "@/lib/adapter"
-import Passkey from "next-auth/providers/passkey"
-import Resend from "next-auth/providers/resend"
 
-const { handlers, auth, signIn, signOut } = NextAuth({
-    experimental: { enableWebAuthn: true },
-    // Use our custom adapter.
-    // Note: SUPABASE_SERVICE_ROLE_KEY is required for the adapter to perform admin actions.
+/** -----------------------------------------------------------------
+ *  1) Build the Auth.js handler
+ *  – Same config object you already had, now all in-line
+ *  – NOTE the Supabase URL + `next_auth` schema we fixed earlier
+ *  ---------------------------------------------------------------- */
+const { handlers, auth } = NextAuth({
     adapter: CustomSupabaseAdapter({
-        url: process.env.DATABASE_URL!,
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL!,                  // REST endpoint, *not* Postgres URL
         secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        db: { schema: "next_auth" },                     // makes every query hit next_auth.*
     }),
+
     providers: [
-        Passkey,
-        Resend({
-            apiKey: process.env.AUTH_RESEND_KEY,
-            from: "noreply@verification.vishalthakur.me",
-        }),
+        WebAuthnProvider({
+            name: "Passkey",
+            relayingParty: {
+                id:  process.env.NODE_ENV === "production"
+                    ? "toolkit.vishalthakur.me"
+                    : "localhost",
+                name: "VT Apps",
+            },
+        })
     ],
-    pages: {
-        signIn: '/login',
-        verifyRequest: '/verify-request',
-    },
-    callbacks: {
-        session({ session, user }) {
-            session.user.id = user.id
-            return session
-        },
-    },
+
+    session: { strategy: "jwt" },                     // or "database" if you prefer
+    experimental: { enableWebAuthn: true },           // keeps the console warning away
 })
 
-export { handlers as GET, handlers as POST }
-export { auth, signIn, signOut }
+/** -----------------------------------------------------------------
+ *  2) Re-export ONLY the real route handlers
+ *  – `handlers` is an object whose .GET and .POST
+ *    are plain functions (what Next.js expects)
+ *  ---------------------------------------------------------------- */
+export const { GET, POST } = handlers   // real route functions
+export { auth }
