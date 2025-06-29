@@ -4,20 +4,22 @@ import { createClient } from "@supabase/supabase-js"
 import type { Adapter } from "next-auth/adapters"
 
 export function CustomSupabaseAdapter(
-    options: {
+    opts: {
         url: string ;
         secret: string;
         db: { schema: string }
     }
 ): Adapter {
-    const supabase = createClient(options.url, options.secret!, {
-        db: { schema: options.db?.schema ?? "next_auth" },
-    })
+    const schema = opts.db?.schema ?? "next_auth"
+    const supabase = createClient(opts.url, opts.secret!,{ db: { schema }})
 
     // Get the base adapter
     const adapter = SupabaseAdapter({
-        url:    options.url    ?? process.env.SUPABASE_URL!,
-        secret: options.secret ?? process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        url:    opts.url    ?? process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        secret: opts.secret ?? process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
+        options: { db: { schema } },
     }) as Adapter
 
     // Manually add the missing methods for the Passkey provider
@@ -91,6 +93,17 @@ export function CustomSupabaseAdapter(
         }
         return data;
     };
+
+    adapter.getUserByEmail = async (email) => {
+        const { data, error } = await supabase               // ← uses next_auth.users
+            .from("users")
+            .select()
+            .eq("email", email)
+            .single()
+
+        if (error && error.code !== "PGRST116") throw error   // unexpected ⇒ re-throw
+        return data ?? null                                   // "not found" ⇒ null
+    }
 
     // Return the modified adapter object
     return adapter;
