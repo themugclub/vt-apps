@@ -7,6 +7,7 @@ import {
     SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import {ModeToggle} from "@/components/ui/mode-toggle";
+import UserButton from "@/components/ui/user-button";
 
 const items = [
     {
