@@ -1,4 +1,4 @@
-import { Calendar, Home, Inbox, Search, Settings } from "lucide-react"
+import {Calendar, Home, Inbox, LayoutDashboard, Search, Settings, StickyNote} from "lucide-react"
 import {
     Sidebar,
     SidebarContent,
@@ -10,9 +10,14 @@ import {ModeToggle} from "@/components/ui/mode-toggle";
 
 const items = [
     {
-        title: "Home",
-        url: "#",
-        icon: Home,
+        title: "Dashboard",
+        url: "/",
+        icon: LayoutDashboard,
+    },
+    {
+        title: "Notes",
+        url: "/notes",
+        icon: StickyNote,
     },
     {
         title: "Inbox",
