@@ -8,30 +8,24 @@ export const authConfig = {
     callbacks: {
         authorized({ auth, request: { nextUrl } }) {
             const isLoggedIn = !!auth?.user;
-            const isAuthRoute = nextUrl.pathname.startsWith('/auth');
             const isProtectedRoute = nextUrl.pathname.startsWith('/notes') || nextUrl.pathname.startsWith('/api/notes');
 
-            // Case 1: User is on an authentication route (e.g., /auth/signin)
-            if (isAuthRoute) {
-                if (isLoggedIn) {
-                    // If a logged-in user tries to access an auth page, redirect them to the homepage.
+            if (isProtectedRoute) {
+                if (isLoggedIn) return true; // If logged in, allow access to protected routes.
+                return false; // If not logged in, redirect to the sign-in page.
+            }
+
+            // This block handles non-protected routes.
+            else if (isLoggedIn) {
+                // If the user is logged in and tries to access an auth page (e.g., sign-in),
+                // redirect them to the homepage.
+                if (nextUrl.pathname.startsWith('/auth')) {
                     return Response.redirect(new URL('/', nextUrl));
                 }
-                // If they are not logged in, allow them to see the auth page.
-                return true;
             }
 
-            // Case 2: User is on a protected route
-            if (isProtectedRoute) {
-                if (isLoggedIn) {
-                    // If they are logged in, allow access.
-                    return true;
-                }
-                // If not logged in, returning false will trigger a redirect to the sign-in page.
-                return false;
-            }
-
-            // Case 3: All other routes (like the homepage '/') are public by default.
+            // For any other case (e.g., unauthenticated user accessing the homepage or sign-in page),
+            // always allow access. This is the key to preventing the redirect loop.
             return true;
         },
         jwt({ token, user }) {
