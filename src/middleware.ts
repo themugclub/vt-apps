@@ -7,6 +7,7 @@ import { authConfig } from './auth.config';
 export default NextAuth(authConfig).auth;
 
 export const config = {
-    // This matcher ensures the middleware runs on all routes except for static files.
-    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+    matcher: [
+        '/((?!_next/static|_next/image|favicon.ico|api/auth|auth).*)'
+    ]
 };

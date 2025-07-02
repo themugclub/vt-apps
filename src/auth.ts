@@ -46,6 +46,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     autocomplete: "username webauthn",
                 },
             },
+            relayingParty: { id: process.env.NODE_ENV === 'production' ? 'toolkit.vishalthakur.me' : 'localhost',
+                name: 'VT Apps' }
         }),
     ],
     basePath: "/auth",
