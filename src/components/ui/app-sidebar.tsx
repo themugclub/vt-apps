@@ -1,4 +1,4 @@
-import {Calendar, Home, Inbox, LayoutDashboard, Search, Settings, StickyNote} from "lucide-react"
+import {Calendar, Inbox, LayoutDashboard, Search, Settings, StickyNote} from "lucide-react"
 import {
     Sidebar,
     SidebarContent,
