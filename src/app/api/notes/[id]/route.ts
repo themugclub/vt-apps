@@ -81,13 +81,15 @@ export async function PATCH(req: NextRequest, context: { params: { id: string } 
 /**
  * DELETE handler for deleting a note.
  */
-export async function DELETE(context: { params: { id: string } }) {
+export async function DELETE(
+    _req: NextRequest,
+    { params }: { params: { id: string } }
+) {
     const session = await auth();
     if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { params } = context;
     const noteId = params.id;
 
     const supabase = createServiceRoleClient();
@@ -102,5 +104,8 @@ export async function DELETE(context: { params: { id: string } }) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "Note deleted successfully" }, { status: 200 });
+    return NextResponse.json(
+        { message: "Note deleted successfully" },
+        { status: 200 }
+    );
 }
