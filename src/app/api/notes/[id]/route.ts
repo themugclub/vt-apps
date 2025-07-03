@@ -84,31 +84,32 @@ export async function PATCH(req: NextRequest, context: { params: { id: string } 
 /**
  * DELETE  /api/notes/[id]
  */
-export async function DELETE(
-    _req: Request,                         // ← add this (or NextRequest)
-    context: { params: { id: string } }    // ← keep this
-) {
-    const session = await auth();
-    if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
-    const noteId = context.params.id;
-
-    const supabase = createServiceRoleClient();
-    const { error } = await supabase
-        .from("notes")
-        .delete()
-        .eq("id", noteId)
-        .eq("user_id", session.user.id);
-
-    if (error) {
-        console.error("Supabase error deleting note:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json(
-        { message: "Note deleted successfully" },
-        { status: 200 }
-    );
-}
+// export async function DELETE(
+//     _req: Request,                         // ← add this (or NextRequest)
+//     context: { params: { id: string } }    // ← keep this
+// ) {
+//     const session = await auth();
+//     if (!session?.user?.id) {
+//         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+//     }
+//
+//     const noteId = context.params.id;
+//
+//     const supabase = createServiceRoleClient();
+//     const { error } = await supabase
+//         .from("notes")
+//         .delete()
+//         .eq("id", noteId)
+//         .eq("user_id", session.user.id);
+//
+//     if (error) {
+//         console.error("Supabase error deleting note:", error);
+//         return NextResponse.json({ error: error.message }, { status: 500 });
+//     }
+//
+//     return NextResponse.json(
+//         { message: "Note deleted successfully" },
+//         { status: 200 }
+//     );
+// }
