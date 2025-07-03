@@ -120,3 +120,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer base {
+  .note-editor ul {
+    list-style: disc;
+    padding-left: 2rem;
+  }
+  .note-editor ol {
+    list-style: decimal;
+    padding-left: 2rem;
+  }
+  .note-editor li {
+    margin-bottom: 0.5rem;
+  }
+  note-title-textarea {
+    field-sizing: content;
+    min-height: 44px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* Container for sticky toolbar on mobile */
+  .sticky-toolbar-container {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--background);
+  }
+}
