@@ -4,11 +4,10 @@ import { auth } from "@/auth";
 import { decryptData, encryptData, decryptUserKey } from "@/lib/crypto";
 import { createStorage } from "unstorage";
 import vercelKVDriver from "unstorage/drivers/vercel-kv";
-import {createServiceRoleClient} from "@/lib/supabase-server";
+import { createServiceRoleClient } from "@/lib/supabase-server";
 
 export const runtime = 'nodejs';
 
-// Storage for user encryption keys
 const userKeyStorage = createStorage({
     driver: vercelKVDriver({
         url: process.env.AUTH_KV_REST_API_URL,
@@ -18,11 +17,6 @@ const userKeyStorage = createStorage({
     })
 });
 
-/**
- * Fetches the decrypted encryption key for the current user.
- * @param {string} userId - The ID of the current user.
- * @returns {Promise<Buffer|null>} The decrypted user key, or null if not found.
- */
 async function getUserKey(userId: string): Promise<Buffer | null> {
     const encryptedKey = await userKeyStorage.getItem(userId) as string | null;
     if (!encryptedKey) {
@@ -30,25 +24,20 @@ async function getUserKey(userId: string): Promise<Buffer | null> {
         return null;
     }
     try {
-        return decryptUserKey(encryptedKey);
+        return await decryptUserKey(encryptedKey);
     } catch (error) {
         console.error(`Failed to decrypt key for user ${userId}:`, error);
         return null;
     }
 }
 
-/**
- * GET handler to fetch and decrypt all notes for the current user.
- */
-export async function GET() {
+export async function GET(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Use the service role client for this server-side operation
     const supabase = createServiceRoleClient();
-
     const userKey = await getUserKey(session.user.id);
     if (!userKey) {
         return NextResponse.json({ error: "Could not retrieve encryption key." }, { status: 500 });
@@ -65,28 +54,23 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Decrypt each note before sending it to the client
-    const decryptedNotes = notes.map(note => ({
+    // Decrypt each note using the new async decryptData function
+    const decryptedNotes = await Promise.all(notes.map(async (note) => ({
         ...note,
-        title: decryptData(note.title, userKey),
-        content: note.content ? decryptData(note.content, userKey) : "",
-    }));
+        title: await decryptData(note.title, userKey),
+        content: note.content ? await decryptData(note.content, userKey) : "",
+    })));
 
     return NextResponse.json(decryptedNotes);
 }
 
-/**
- * POST handler to encrypt and save a new note.
- */
 export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Use the service role client for this server-side operation
     const supabase = createServiceRoleClient();
-
     const userKey = await getUserKey(session.user.id);
     if (!userKey) {
         return NextResponse.json({ error: "Could not retrieve encryption key." }, { status: 500 });
@@ -98,8 +82,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
-    const encryptedTitle = encryptData(title, userKey);
-    const encryptedContent = content ? encryptData(content, userKey) : null;
+    const encryptedTitle = await encryptData(title, userKey);
+    const encryptedContent = content ? await encryptData(content, userKey) : null;
 
     const { data, error } = await supabase
         .from("notes")
@@ -113,14 +97,13 @@ export async function POST(req: NextRequest) {
 
     if (error) {
         console.error("Supabase error creating note:", error);
-        // The error from Supabase will now be more informative if it's not RLS.
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const decryptedNote = {
         ...data,
-        title: decryptData(data.title, userKey),
-        content: data.content ? decryptData(data.content, userKey) : "",
+        title: await decryptData(data.title, userKey),
+        content: data.content ? await decryptData(data.content, userKey) : "",
     };
 
     return NextResponse.json(decryptedNote, { status: 201 });

@@ -5,10 +5,9 @@ import { createStorage } from "unstorage";
 import vercelKVDriver from "unstorage/drivers/vercel-kv";
 import { UnstorageAdapter } from "@auth/unstorage-adapter";
 import { createServiceRoleClient } from './lib/supabase-server';
-import crypto from 'crypto';
 import { encryptUserKey } from './lib/crypto';
 
-// Storage for NextAuth data (Users, Sessions, Authenticators for Passkeys)
+// Storage for NextAuth data
 const storage = createStorage({
     driver: vercelKVDriver({
         url: process.env.AUTH_KV_REST_API_URL,
@@ -45,8 +44,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     events: {
         async createUser(message) {
             const user = message.user;
-            if (!user.id || !user.email) return;
+            if (!user.id) return;
 
+            // Step 1: Directly sync the user to Supabase.
+            // This will now succeed because the blocking foreign key constraint has been removed.
             const supabase = createServiceRoleClient();
             const { error: supabaseError } = await supabase.from('users').insert({
                 id: user.id,
@@ -55,15 +56,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
 
             if (supabaseError) {
-                console.error("CRITICAL: Failed to sync new user to Supabase:", JSON.stringify(supabaseError, null, 2));
+                console.error("CRITICAL: Failed to sync new user to Supabase.", JSON.stringify(supabaseError, null, 2));
                 throw new Error("Could not create user record in application database.");
             }
+            console.log(`Successfully synced user ${user.id} to Supabase.`);
+
+            // Step 2: Create the user's encryption key.
             try {
-                const userEncryptionKey = crypto.randomBytes(32);
-                const encryptedUserKey = encryptUserKey(userEncryptionKey);
+                const userEncryptionKeyBytes = crypto.getRandomValues(new Uint8Array(32));
+                const userEncryptionKey = Buffer.from(userEncryptionKeyBytes);
+                const encryptedUserKey = await encryptUserKey(userEncryptionKey);
                 await userKeyStorage.setItem(user.id, encryptedUserKey);
+                console.log(`Successfully created encryption key for user ${user.id}`);
             } catch (keyError) {
-                console.error("CRITICAL: Failed to create user encryption key:", keyError);
+                console.error(`CRITICAL: Failed to create and store user encryption key for user ${user.id}:`, keyError);
+                throw new Error("Could not generate user encryption key.");
             }
         }
     },
@@ -74,20 +81,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const isAuthRoute = nextUrl.pathname.startsWith('/auth');
 
             if (isProtectedRoute) {
-                // If on a protected route, returning false will automatically redirect to the login page.
                 return isLoggedIn;
             }
 
             if (isAuthRoute) {
                 if (isLoggedIn) {
-                    // If the user is logged in, redirect them from auth pages to the main dashboard.
                     return Response.redirect(new URL('/notes', nextUrl));
                 }
-                // Allow unauthenticated users to access auth pages (e.g., /auth/signin).
                 return true;
             }
 
-            // Allow access to all other pages (like the homepage).
             return true;
         },
         async session({ session, user }) {

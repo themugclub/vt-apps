@@ -4,11 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import {auth} from "@/auth";
-
-export const runtime = 'nodejs';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Define the structure of a Note object
 interface Note {
@@ -46,15 +42,26 @@ export default function NotesPage() {
         fetchNotes();
     }, []);
 
+    // This effect ensures the editor's content updates when a new note is selected.
+    useEffect(() => {
+        if (contentRef.current) {
+            const newContent = currentNote?.content || '';
+            if (contentRef.current.innerHTML !== newContent) {
+                contentRef.current.innerHTML = newContent;
+            }
+        }
+    }, [currentNote]);
+
+
     const handleNewNote = () => {
-        setCurrentNote({title: '', content: ''});
+        setCurrentNote({ title: '', content: '' });
+        if (contentRef.current) {
+            contentRef.current.innerHTML = '';
+        }
     };
 
     const handleSelectNote = (note: Note) => {
         setCurrentNote(note);
-        if (contentRef.current) {
-            contentRef.current.innerHTML = note.content || '';
-        }
     };
 
     const handleSaveNote = async () => {
@@ -70,8 +77,9 @@ export default function NotesPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    id: currentNote.id,
                     title: currentNote.title,
-                    content: contentToSave, // Send the updated content
+                    content: contentToSave,
                 }),
             });
 
@@ -81,29 +89,14 @@ export default function NotesPage() {
             }
 
             const newNote = await response.json();
-            setNotes([newNote, ...notes]);
-            setCurrentNote(newNote);
+            setNotes([newNote, ...notes.filter(n => n.id !== newNote.id)]);
             setError(null);
+            handleNewNote();
 
         } catch (err: any) {
             setError(err.message);
         }
     };
-
-    // NOTE: Image handling (compression, upload) is a complex feature.
-    // I've set up the structure here, but the implementation will be added in a future step.
-    const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-        console.log("Pasting content...");
-        // Future logic for image handling will go here.
-    };
-
-    if (isLoading) {
-        return <div className="p-8">Loading your secure notes...</div>;
-    }
-
-    if (error) {
-        return <div className="p-8 text-red-500">Error: {error}</div>;
-    }
 
     const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -118,13 +111,9 @@ export default function NotesPage() {
                 body: formData,
             });
 
-            if (!response.ok) {
-                throw new Error("Image upload failed.");
-            }
+            if (!response.ok) throw new Error("Image upload failed.");
 
             const { url } = await response.json();
-
-            // Insert the image into the contentEditable div
             if (contentRef.current) {
                 const imgTag = `<img src="${url}" alt="${file.name}" style="max-width: 100%; height: auto; border-radius: 8px;" />`;
                 contentRef.current.innerHTML += imgTag;
@@ -135,24 +124,33 @@ export default function NotesPage() {
         }
     };
 
+    if (isLoading) {
+        return <div className="flex items-center justify-center h-screen"><p>Loading your secure notes...</p></div>;
+    }
+
+    if (error) {
+        return <div className="p-8 text-destructive">Error: {error}</div>;
+    }
+
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+        // **FIX:** A responsive grid layout that fills the parent container's height and width.
+        <div className="grid h-full w-full md:grid-cols-[minmax(300px,_1fr)_3fr]">
             {/* Sidebar with list of notes */}
-            <aside className="w-1/3 border-r border-gray-200 dark:border-gray-700 p-4 overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
+            <aside className="flex flex-col border-r bg-background p-4">
+                <div className="flex justify-between items-center mb-4 flex-shrink-0">
                     <h2 className="text-xl font-bold">My Notes</h2>
                     <Button onClick={handleNewNote}>New Note</Button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-y-auto">
                     {notes.map((note) => (
                         <Card
                             key={note.id}
                             onClick={() => handleSelectNote(note)}
-                            className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 ${currentNote?.id === note.id ? 'bg-gray-200 dark:bg-gray-800 border-primary' : ''}`}
+                            className={`cursor-pointer transition-colors hover:bg-accent ${currentNote?.id === note.id ? 'border-primary bg-accent' : ''}`}
                         >
                             <CardHeader className="p-4">
                                 <CardTitle className="text-md truncate">{note.title}</CardTitle>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted-foreground">
                                     {new Date(note.created_at).toLocaleDateString()}
                                 </p>
                             </CardHeader>
@@ -162,28 +160,23 @@ export default function NotesPage() {
             </aside>
 
             {/* Main content area for editing a note */}
-            <main className="w-2/3 p-6">
+            {/* **FIX:** 'overflow-hidden' on the parent and 'overflow-y-auto' on the editor prevent layout breaks. */}
+            <div className="flex flex-col p-6 overflow-hidden">
                 {currentNote ? (
-                    <div className="flex flex-col h-full">
+                    <div className="flex flex-col h-full min-h-0">
                         <Input
                             placeholder="Note Title"
                             value={currentNote.title || ''}
-                            onChange={(e) => setCurrentNote({...currentNote, title: e.target.value})}
-                            className="text-2xl font-bold mb-4 p-2 border-0 focus:ring-0 shadow-none"
+                            onChange={(e) => setCurrentNote({ ...currentNote, title: e.target.value })}
+                            className="text-2xl font-bold mb-4 p-2 border-0 focus:ring-0 shadow-none bg-transparent flex-shrink-0"
                         />
                         <div
-                            onPaste={handlePaste}
+                            ref={contentRef}
                             contentEditable
                             suppressContentEditableWarning
-                            className="flex-grow p-4 border rounded-md bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary"
-                            style={{minHeight: '400px'}}
-                        >
-                            {/* The content will be managed via state, but this makes it editable */}
-                            {/* For a real rich text editor, a library like Tiptap/Lexical would be better */}
-                        </div>
-
-                        <div className="mt-4 flex justify-between">
-                            {/* Hidden file input */}
+                            className="flex-grow p-4 border rounded-md bg-card text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring overflow-y-auto"
+                        />
+                        <div className="mt-4 flex justify-between flex-shrink-0">
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -191,7 +184,6 @@ export default function NotesPage() {
                                 accept="image/*"
                                 style={{ display: 'none' }}
                             />
-                            {/* Button to trigger file input */}
                             <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                                 Upload Image
                             </Button>
@@ -200,10 +192,10 @@ export default function NotesPage() {
                     </div>
                 ) : (
                     <div className="flex items-center justify-center h-full">
-                        <p className="text-gray-500">Select a note to view or create a new one.</p>
+                        <p className="text-muted-foreground">Select a note to view or create a new one.</p>
                     </div>
                 )}
-            </main>
+            </div>
         </div>
     );
 }
