@@ -82,8 +82,8 @@ export async function PATCH(req: NextRequest, context: { params: { id: string } 
  * DELETE handler for deleting a note.
  */
 export async function DELETE(
-    _req: NextRequest,
-    { params }: { params: { id: string } }
+    req: NextRequest,                       // 1️⃣ always present—even if unused
+    { params }: { params: { id: string } } // 2️⃣ *destructured* context object
 ) {
     const session = await auth();
     if (!session?.user?.id) {
