@@ -32,27 +32,27 @@ async function getUserKey(userId: string): Promise<Buffer | null> {
  * PATCH handler for updating an existing note.
  * The { params } object is correctly destructured from the second argument.
  */
-export async function PATCH(req: NextRequest, context: { params: { id: string } }) {
+export async function PATCH(
+    req: NextRequest,
+    { params }: { params: Promise<{ id: string }> }   // ← must be Promise
+) {
+    const { id: noteId } = await params;              // ← await it
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user?.id)
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { params } = context;
-    const noteId = params.id;
 
     const userKey = await getUserKey(session.user.id);
-    if (!userKey) {
-        return NextResponse.json({ error: "Could not retrieve encryption key." }, { status: 500 });
-    }
+    if (!userKey)
+        return NextResponse.json(
+            { error: "Could not retrieve encryption key." },
+            { status: 500 }
+        );
 
     const { title, content } = await req.json();
-
-    if (!title) {
+    if (!title)
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
-    }
 
-    const encryptedTitle = await encryptData(title, userKey);
+    const encryptedTitle   = await encryptData(title,  userKey);
     const encryptedContent = content ? await encryptData(content, userKey) : null;
 
     const supabase = createServiceRoleClient();
@@ -64,18 +64,17 @@ export async function PATCH(req: NextRequest, context: { params: { id: string } 
         .select()
         .single();
 
-    if (error) {
-        console.error("Supabase error updating note:", error);
+    if (error)
         return NextResponse.json({ error: error.message }, { status: 500 });
-    }
 
-    const decryptedNote = {
-        ...data,
-        title: await decryptData(data.title, userKey),
-        content: data.content ? await decryptData(data.content, userKey) : "",
-    };
-
-    return NextResponse.json(decryptedNote, { status: 200 });
+    return NextResponse.json(
+        {
+            ...data,
+            title:   await decryptData(data.title,  userKey),
+            content: data.content ? await decryptData(data.content, userKey) : "",
+        },
+        { status: 200 }
+    );
 }
 
 /**
@@ -85,31 +84,27 @@ export async function PATCH(req: NextRequest, context: { params: { id: string } 
  * DELETE  /api/notes/[id]
  */
 
-// export async function DELETE(
-//     _req: Request,                         // ← add this (or NextRequest)
-//     context: { params: { id: string } }    // ← keep this
-// ) {
-//     const session = await auth();
-//     if (!session?.user?.id) {
-//         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-//     }
-//
-//     const noteId = context.params.id;
-//
-//     const supabase = createServiceRoleClient();
-//     const { error } = await supabase
-//         .from("notes")
-//         .delete()
-//         .eq("id", noteId)
-//         .eq("user_id", session.user.id);
-//
-//     if (error) {
-//         console.error("Supabase error deleting note:", error);
-//         return NextResponse.json({ error: error.message }, { status: 500 });
-//     }
-//
-//     return NextResponse.json(
-//         { message: "Note deleted successfully" },
-//         { status: 200 }
-//     );
-// }
+export async function DELETE(
+    _req: NextRequest,                                   // unused → underscore
+    { params }: { params: Promise<{ id: string }> }      // ← Promise here too
+) {
+    const { id: noteId } = await params;                 // ← await it
+    const session = await auth();
+    if (!session?.user?.id)
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", noteId)
+        .eq("user_id", session.user.id);
+
+    if (error)
+        return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json(
+        { message: "Note deleted successfully" },
+        { status: 200 }
+    );
+}
