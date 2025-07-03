@@ -1,17 +1,15 @@
 // src/auth.ts
-import NextAuth, { DefaultSession, User } from "next-auth"
-import Passkey from "next-auth/providers/passkey"
-import { createStorage } from "unstorage"
-import vercelKVDriver from "unstorage/drivers/vercel-kv"
-import { UnstorageAdapter } from "@auth/unstorage-adapter"
-import "next-auth/jwt"
-// FIX: Explicitly import the Node.js crypto module to get access to 'randomBytes'.
+import NextAuth from 'next-auth';
+import Passkey from 'next-auth/providers/passkey';
+import { createStorage } from "unstorage";
+import vercelKVDriver from "unstorage/drivers/vercel-kv";
+import { UnstorageAdapter } from "@auth/unstorage-adapter";
+import { createServiceRoleClient } from './lib/supabase-server';
 import crypto from 'crypto';
-import { encryptUserKey } from "@/lib/crypto";
-import {authConfig} from "@/auth.config";
+import { encryptUserKey } from './lib/crypto';
 
-// This storage is used by Auth.js for its own data (users, accounts, etc.)
-const authStorage = createStorage({
+// Storage for NextAuth data (Users, Sessions, Authenticators for Passkeys)
+const storage = createStorage({
     driver: vercelKVDriver({
         url: process.env.AUTH_KV_REST_API_URL,
         token: process.env.AUTH_KV_REST_API_TOKEN,
@@ -19,24 +17,20 @@ const authStorage = createStorage({
     })
 });
 
-// We create a separate storage instance for our custom user encryption keys
-// to keep them separate from the main auth data.
+// Separate storage for your custom encryption keys
 const userKeyStorage = createStorage({
     driver: vercelKVDriver({
         url: process.env.AUTH_KV_REST_API_URL,
         token: process.env.AUTH_KV_REST_API_TOKEN,
         env: false,
-        // We can use a base prefix to namespace our keys
         base: "userkeys:",
     })
 });
 
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    ...authConfig, // Spread the Edge-safe config
-    debug: !!process.env.AUTH_DEBUG,
-    theme: { logo: "https://authjs.dev/img/logo-sm.png" },
-    adapter: UnstorageAdapter(authStorage),
+    secret: process.env.AUTH_SECRET,
+    basePath: '/auth',
+    adapter: UnstorageAdapter(storage),
     providers: [
         Passkey({
             formFields: {
@@ -46,32 +40,62 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     autocomplete: "username webauthn",
                 },
             },
-            relayingParty: { id: process.env.NODE_ENV === 'production' ? 'toolkit.vishalthakur.me' : 'localhost',
-                name: 'VT Apps' }
         }),
     ],
-    basePath: "/auth",
-    session: { strategy: "jwt" },
     events: {
-        async createUser({ user }) {
-            if (!user.id) return;
-            const userEncryptionKey = crypto.randomBytes(32);
-            const encryptedUserKey = encryptUserKey(userEncryptionKey);
-            await userKeyStorage.setItem(user.id, encryptedUserKey);
+        async createUser(message) {
+            const user = message.user;
+            if (!user.id || !user.email) return;
+
+            const supabase = createServiceRoleClient();
+            const { error: supabaseError } = await supabase.from('users').insert({
+                id: user.id,
+                email: user.email,
+                name: user.name,
+            });
+
+            if (supabaseError) {
+                console.error("CRITICAL: Failed to sync new user to Supabase:", JSON.stringify(supabaseError, null, 2));
+                throw new Error("Could not create user record in application database.");
+            }
+            try {
+                const userEncryptionKey = crypto.randomBytes(32);
+                const encryptedUserKey = encryptUserKey(userEncryptionKey);
+                await userKeyStorage.setItem(user.id, encryptedUserKey);
+            } catch (keyError) {
+                console.error("CRITICAL: Failed to create user encryption key:", keyError);
+            }
         }
     },
-    experimental: { enableWebAuthn: true },
-})
+    callbacks: {
+        authorized({ auth, request: { nextUrl } }) {
+            const isLoggedIn = !!auth?.user;
+            const isProtectedRoute = nextUrl.pathname.startsWith('/notes') || nextUrl.pathname.startsWith('/api/notes');
+            const isAuthRoute = nextUrl.pathname.startsWith('/auth');
 
-// Extend the default Session and User types to include the 'id' field.
-declare module "next-auth" {
-    interface Session {
-        user: {
-            id: string;
-        } & DefaultSession["user"];
-    }
-    // The default User type does not include 'id', so we add it.
-    interface User {
-        id: string;
-    }
-}
+            if (isProtectedRoute) {
+                // If on a protected route, returning false will automatically redirect to the login page.
+                return isLoggedIn;
+            }
+
+            if (isAuthRoute) {
+                if (isLoggedIn) {
+                    // If the user is logged in, redirect them from auth pages to the main dashboard.
+                    return Response.redirect(new URL('/notes', nextUrl));
+                }
+                // Allow unauthenticated users to access auth pages (e.g., /auth/signin).
+                return true;
+            }
+
+            // Allow access to all other pages (like the homepage).
+            return true;
+        },
+        async session({ session, user }) {
+            if (session.user) {
+                session.user.id = user.id;
+            }
+            return session;
+        },
+    },
+    experimental: { enableWebAuthn: true },
+});

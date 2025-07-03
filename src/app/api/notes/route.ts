@@ -1,12 +1,12 @@
 // src/app/api/notes/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createClient } from "@/lib/supabase";
 import { decryptData, encryptData, decryptUserKey } from "@/lib/crypto";
 import { createStorage } from "unstorage";
 import vercelKVDriver from "unstorage/drivers/vercel-kv";
+import {createServiceRoleClient} from "@/lib/supabase-server";
 
-const supabase = createClient();
+export const runtime = 'nodejs';
 
 // Storage for user encryption keys
 const userKeyStorage = createStorage({
@@ -46,6 +46,9 @@ export async function GET() {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Use the service role client for this server-side operation
+    const supabase = createServiceRoleClient();
+
     const userKey = await getUserKey(session.user.id);
     if (!userKey) {
         return NextResponse.json({ error: "Could not retrieve encryption key." }, { status: 500 });
@@ -81,6 +84,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Use the service role client for this server-side operation
+    const supabase = createServiceRoleClient();
+
     const userKey = await getUserKey(session.user.id);
     if (!userKey) {
         return NextResponse.json({ error: "Could not retrieve encryption key." }, { status: 500 });
@@ -92,7 +98,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
-    // Encrypt the data before storing it
     const encryptedTitle = encryptData(title, userKey);
     const encryptedContent = content ? encryptData(content, userKey) : null;
 
@@ -108,10 +113,10 @@ export async function POST(req: NextRequest) {
 
     if (error) {
         console.error("Supabase error creating note:", error);
+        // The error from Supabase will now be more informative if it's not RLS.
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Decrypt the newly created note to send back to the client
     const decryptedNote = {
         ...data,
         title: decryptData(data.title, userKey),

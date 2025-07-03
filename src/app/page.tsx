@@ -3,6 +3,8 @@ import { auth } from "@/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import UserButton from "@/components/ui/user-button";
 
+export const runtime = 'nodejs';
+
 export default async function Home() {
     const session = await auth()
     return (

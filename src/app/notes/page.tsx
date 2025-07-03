@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import {auth} from "@/auth";
 
+export const runtime = 'nodejs';
+
 // Define the structure of a Note object
 interface Note {
     id: string;
@@ -21,6 +23,8 @@ export default function NotesPage() {
     const [currentNote, setCurrentNote] = useState<Partial<Note> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
 
     // Fetch notes from our API when the component mounts
     useEffect(() => {
@@ -48,6 +52,9 @@ export default function NotesPage() {
 
     const handleSelectNote = (note: Note) => {
         setCurrentNote(note);
+        if (contentRef.current) {
+            contentRef.current.innerHTML = note.content || '';
+        }
     };
 
     const handleSaveNote = async () => {
@@ -56,13 +63,15 @@ export default function NotesPage() {
             return;
         }
 
+        const contentToSave = contentRef.current?.innerHTML || '';
+
         try {
             const response = await fetch('/api/notes', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     title: currentNote.title,
-                    content: currentNote.content,
+                    content: contentToSave, // Send the updated content
                 }),
             });
 
@@ -95,6 +104,36 @@ export default function NotesPage() {
     if (error) {
         return <div className="p-8 text-red-500">Error: {error}</div>;
     }
+
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch('/api/notes/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                throw new Error("Image upload failed.");
+            }
+
+            const { url } = await response.json();
+
+            // Insert the image into the contentEditable div
+            if (contentRef.current) {
+                const imgTag = `<img src="${url}" alt="${file.name}" style="max-width: 100%; height: auto; border-radius: 8px;" />`;
+                contentRef.current.innerHTML += imgTag;
+            }
+
+        } catch (uploadError: any) {
+            setError(uploadError.message);
+        }
+    };
 
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
@@ -143,7 +182,19 @@ export default function NotesPage() {
                             {/* For a real rich text editor, a library like Tiptap/Lexical would be better */}
                         </div>
 
-                        <div className="mt-4 flex justify-end">
+                        <div className="mt-4 flex justify-between">
+                            {/* Hidden file input */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleImageUpload}
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                            />
+                            {/* Button to trigger file input */}
+                            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                                Upload Image
+                            </Button>
                             <Button onClick={handleSaveNote}>Save Note</Button>
                         </div>
                     </div>

@@ -7,6 +7,8 @@ import React from "react";
 import {ThemeProvider} from "@/components/ui/theme-provider";
 import AuthProvider from "@/app/authprovider";
 
+export const runtime = 'nodejs';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
