@@ -2,13 +2,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, {useState, useEffect, useRef, useCallback} from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {Button} from '@/components/ui/button';
 import {Card, CardHeader, CardTitle} from '@/components/ui/card';
 import {useIsMobile} from '@/hooks/use-mobile';
 import FormattingToolbar from '@/components/ui/FormattingToolbar';
 import {ArrowLeft} from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import {useRealtimeNotes} from "@/lib/use-realtime-notes";
+import {useSession} from "next-auth/react";
 
 interface Note {
     id: string;
@@ -19,6 +21,15 @@ interface Note {
 
 export default function NotesPage() {
     const [notes, setNotes] = useState<Note[]>([]);
+
+    const { data: session } = useSession();
+
+    useRealtimeNotes(session?.user?.id, {
+        onInsert: (n) => setNotes((prev) => [n, ...prev]),
+        onUpdate: (n) => setNotes((prev) => prev.map((x) => (x.id === n.id ? n : x))),
+        onDelete: (id) => setNotes((prev) => prev.filter((x) => x.id !== id)),
+    });
+
     const [currentNote, setCurrentNote] = useState<Partial<Note> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

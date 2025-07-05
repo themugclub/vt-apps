@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     const { data } = supabase.storage
-        .from("note-images")
+        .from("notes-images")
         .getPublicUrl(filePath);
 
     if (!data?.publicUrl) {
